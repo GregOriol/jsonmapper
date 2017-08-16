@@ -51,6 +51,14 @@ class JsonMapper
     protected $logger;
 
     /**
+     * PSR-16 simple cache object
+     * @link http://www.php-fig.org/psr/psr-16/
+     * @var  \Psr\SimpleCache\CacheInterface
+     * @see setSimpleCache()
+     */
+    protected $simpleCache;
+
+    /**
      * Throw an exception when JSON data contain a property
      * that is not defined in the PHP class
      *
@@ -196,24 +204,8 @@ class JsonMapper
             $key = $this->getSafeName($key);
             $providedProperties[$key] = true;
 
-            // Store the property inspection results so we don't have to do it
-            // again for subsequent objects of the same type
-            if (!isset($this->arInspectedClasses[$strClassName][$key])) {
-                try {
-                    $this->arInspectedClasses[$strClassName][$key]
-                        = $this->inspectProperty($rc, $key, $resolverContext);
-                } catch (\Exception $e) {
-                    throw new JsonMapper_Exception(
-                        "Error during the parsing of the type for $jsonPath: "
-                        . $e->getMessage(),
-                        $e->getCode(),
-                        $e
-                    );
-                }
-            }
-
             list($hasProperty, $accessor, $type)
-                = $this->arInspectedClasses[$strClassName][$key];
+                = $this->getPropertyInfo($strClassName, $key, $jsonPath, $rc, $resolverContext);
 
             if (!$hasProperty) {
                 if ($this->bExceptionOnUndefinedProperty || $strictChecking) {
@@ -642,6 +634,50 @@ class JsonMapper
         return $jvalue;
     }
 
+    /**
+     * Return informations about a property, like its type.
+     *
+     * Property inspection results are stored into $arInspectedClasses and in
+     * a cache provider if it is given, so we don't have to do it again for
+     * subsequent objects of the same type.
+     *
+     * @param string $strClassName
+     * @param string $property
+     * @return array First value: if the property exists
+     *               Second value: the accessor to use (
+     *                 ReflectionMethod or ReflectionProperty, or null)
+     *               Third value: type of the property (\phpDocumentor\Reflection\Type or null)
+     * @throws JsonMapper_Exception
+     */
+    protected function getPropertyInfo($strClassName, $property, $jsonPath, $rc, $resolverContext) {
+
+        if (isset($this->arInspectedClasses[$strClassName][$property])) {
+            return $this->arInspectedClasses[$strClassName][$property];
+        }
+
+        $propertyInfo = null;
+        if ($this->simpleCache) {
+            $cacheKey = str_replace('\\', '|', $strClassName).'.'.$property;
+            $propertyInfo = $this->simpleCache->get($cacheKey);
+        }
+
+        if ($propertyInfo === null) {
+            try {
+                $propertyInfo = $this->inspectProperty($rc, $property, $resolverContext);
+                if ($this->simpleCache) {
+                    $this->simpleCache->set($cacheKey, $propertyInfo);
+                }
+            } catch (\Exception $e) {
+                throw new JsonMapper_Exception(
+                    "Error during the parsing of the type for $jsonPath: ".$e->getMessage(),
+                    $e->getCode(),
+                    $e);
+            }
+        }
+
+        $this->arInspectedClasses[$strClassName][$property] = $propertyInfo;
+        return $propertyInfo;
+    }
 
     /**
      * Try to find out if a property exists in a given class.
@@ -1052,7 +1088,7 @@ class JsonMapper
      * @param string $message Text to log
      * @param array  $context Additional information
      *
-     * @return null
+     * @return void
      */
     protected function log($level, $message, array $context = array())
     {
@@ -1066,10 +1102,19 @@ class JsonMapper
      *
      * @param LoggerInterface $logger PSR-3 compatible logger object
      *
-     * @return null
+     * @return void
      */
     public function setLogger($logger)
     {
         $this->logger = $logger;
+    }
+
+    /**
+     * Sets a cache provider, to allow to cache informations about properties
+     *
+     * @param \Psr\SimpleCache\CacheInterface $simpleCache
+     */
+    public function setSimpleCaching(\Psr\SimpleCache\CacheInterface $simpleCache) {
+        $this->simpleCache = $simpleCache;
     }
 }

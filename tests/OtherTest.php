@@ -328,7 +328,6 @@ class OtherTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals('database', $sn->simple->db);
     }
 
-
     public function testLossyDataConversionSimple() {
         $jm = new JsonMapper();
         $jm->bSimpleTypeLossyDataConversionChecking = true;
@@ -358,6 +357,45 @@ class OtherTest extends \PHPUnit_Framework_TestCase
         $jm->map(json_decode($json), new JsonMapperTest_Simple());
     }
 
+    public function testSimpleCache()
+    {
+        $psr6pool = new \Cache\Adapter\PHPArray\ArrayCachePool();
+        $simpleCache = new \Cache\Bridge\SimpleCache\SimpleCacheBridge($psr6pool);
 
+        $jm = new JsonMapper();
+        $jm->setSimpleCaching($simpleCache);
+        $sn = $jm->map(
+            json_decode('{"simple":{"str":"stringvalue"}}'),
+            new JsonMapperTest_Simple()
+        );
+        $this->assertInternalType('object', $sn->simple);
+        $this->assertInstanceOf('JsonMapperTest_Simple', $sn->simple);
+        $this->assertEquals('stringvalue', $sn->simple->str);
+
+        $property = $simpleCache->get('JsonMapperTest_Simple.simple');
+        $this->assertNotNull($property);
+        $this->assertTrue(is_array($property));
+        $this->assertCount(3, $property);
+        $this->assertTrue($property[0]);
+        $this->assertInstanceOf('\\phpDocumentor\\Reflection\\Types\\Object_', $property[2]);
+
+        // start again
+        $sn = $jm->map(
+            json_decode('{"simple":{"str":"stringvalue"}}'),
+            new JsonMapperTest_Simple()
+        );
+        $this->assertInternalType('object', $sn->simple);
+        $this->assertInstanceOf('JsonMapperTest_Simple', $sn->simple);
+        $this->assertEquals('stringvalue', $sn->simple->str);
+
+        $property = $simpleCache->get('JsonMapperTest_Simple.simple');
+        $this->assertNotNull($property);
+        $this->assertTrue(is_array($property));
+        $this->assertCount(3, $property);
+        $this->assertTrue($property[0]);
+        $this->assertInstanceOf('\\phpDocumentor\\Reflection\\Types\\Object_', $property[2]);
+
+
+    }
 }
 ?>

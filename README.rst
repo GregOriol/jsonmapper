@@ -320,6 +320,17 @@ Events that get logged:
 
 __ http://www.php-fig.org/psr/psr-3/
 
+Caching
+=======
+
+JsonMapper can set data of properties into a cache (results of the parsing of
+types in docblocks...), so it needn't to reparse docblocks and sources files
+at each requests.
+
+JsonMapper supports PSR-16__ simple cache providers. You set the cache provider
+with the ``setSimpleCaching()`` method.
+
+__ http://www.php-fig.org/psr/psr-16/
 
 Handling invalid or missing data
 ================================
